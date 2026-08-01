@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ᎬꪎՄ ─𑁍 𝐏𝐫𝐨𝐱𝐲 𝐂𝐚𝐩𝐭𝐮𝐫𝐞</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* ===== CSS Variables ===== */
+        :root {
+            --bg-primary: rgba(10, 14, 26, 0.7);
+            --bg-secondary: rgba(17, 24, 39, 0.75);
+            --bg-card: rgba(26, 35, 50, 0.55);
+            --bg-hover: rgba(36, 48, 71, 0.7);
+            --bg-input: rgba(13, 21, 32, 0.6);
+            --border-color: rgba(30, 45, 69, 0.4);
+            --border-hover: rgba(42, 61, 90, 0.6);
+            --text-primary: #e8edf5;
+            --text-secondary: #8899bb;
+            --text-muted: #4a5a7a;
+            --accent: #7c9bff;
+            --accent-glow: rgba(124, 155, 255, 0.15);
+            --accent-hover: #5b7cfa;
+            --success: #34d399;
+            --success-bg: rgba(52, 211, 153, 0.12);
+            --warning: #fbbf24;
+            --warning-bg: rgba(251, 191, 36, 0.12);
+            --error: #f87171;
+            --error-bg: rgba(248, 113, 113, 0.12);
+            --radius: 14px;
+            --radius-sm: 8px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --font-brand: 'Georgia', 'Inter', -apple-system, BlinkMacSystemFont, serif;
+        }
+
+        /* ===== Reset & Base ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-brand);
+            min-height: 100vh;
+            background: #0a0e1a;
+            position: relative;
+            color: var(--text-primary);
+            overflow: hidden;
+            font-weight: 400;
+            letter-spacing: 0.3px;
+        }
+
+        /* ===== Liquid Glass Background ===== */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background: 
+                radial-gradient(ellipse at 15% 40%, rgba(124, 155, 255, 0.06) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 60%, rgba(139, 92, 246, 0.06) 0%, transparent 55%),
+                radial-gradient(ellipse at 50% 100%, rgba(52, 211, 153, 0.04) 0%, transparent 45%),
+                radial-gradient(ellipse at 50% 0%, rgba(251, 191, 36, 0.03) 0%, transparent 40%),
+                #0a0e1a;
+        }
+
+        /* Animated Liquid Glass Overlay */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: url('background.png') center/cover fixed;
+            opacity: 0.10;
+            mix-blend-mode: overlay;
+            animation: liquidShift 30s ease-in-out infinite alternate;
+            filter: saturate(1.2);
+        }
+
+        @keyframes liquidShift {
+            0% { 
+                transform: scale(1) rotate(0deg) translateX(0%) translateY(0%);
+                filter: hue-rotate(0deg) saturate(1.2) brightness(1);
+            }
+            25% { 
+                transform: scale(1.04) rotate(1.5deg) translateX(3%) translateY(-2%);
+                filter: hue-rotate(15deg) saturate(1.4) brightness(1.05);
+            }
+            50% { 
+                transform: scale(1.08) rotate(-1deg) translateX(-2%) translateY(4%);
+                filter: hue-rotate(-10deg) saturate(1.1) brightness(0.95);
+            }
+            75% { 
+                transform: scale(1.04) rotate(2deg) translateX(4%) translateY(-3%);
+                filter: hue-rotate(20deg) saturate(1.3) brightness(1.02);
+            }
+            100% { 
+                transform: scale(1) rotate(0deg) translateX(0%) translateY(0%);
+                filter: hue-rotate(0deg) saturate(1.2) brightness(1);
+            }
+        }
+
+        /* Floating Glass Orbs */
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: -1;
+            animation: orbFloat 20s ease-in-out infinite alternate;
+        }
+
+        .orb-1 {
+            width: 500px;
+            height: 500px;
+            background: rgba(124, 155, 255, 0.04);
+            top: -10%;
+            right: -5%;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 400px;
+            height: 400px;
+            background: rgba(139, 92, 246, 0.04);
+            bottom: -10%;
+            left: -5%;
+            animation-delay: -7s;
+        }
+
+        .orb-3 {
+            width: 300px;
+            height: 300px;
+            background: rgba(52, 211, 153, 0.03);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -14s;
+        }
+
+        @keyframes orbFloat {
+            0% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -20px) scale(1.1); }
+            66% { transform: translate(-20px, 30px) scale(0.9); }
+            100% { transform: translate(10px, -10px) scale(1.05); }
+        }
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(17, 24, 39, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(124, 155, 255, 0.3);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(124, 155, 255, 0.5);
+        }
+
+        /* ===== App Layout ===== */
+        .app {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            backdrop-filter: blur(2px);
+        }
+
+        /* ===== Sidebar ===== */
+        .sidebar {
+            width: 280px;
+            background: var(--bg-secondary);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow-y: auto;
+            padding: 24px 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 24px;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 800;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 4px 20px rgba(124, 155, 255, 0.2);
+            font-family: var(--font-brand);
+            letter-spacing: 1px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            line-height: 1.3;
+            font-family: var(--font-brand);
+        }
+
+        .logo-text .brand {
+            color: var(--accent);
+            font-family: var(--font-brand);
+            font-weight: 800;
+            letter-spacing: 1px;
+            font-size: 22px;
+        }
+
+        .logo-text .sub {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            display: block;
+            margin-top: 2px;
+            font-family: var(--font-brand);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 14px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-card .number {
+            font-size: 22px;
+            font-weight: 700;
+            line-height: 1.2;
+            font-family: var(--font-brand);
+        }
+
+        .stat-card .label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+            font-weight: 600;
+            font-family: var(--font-brand);
+        }
+
+        .stat-card.primary .number { color: var(--accent); }
+        .stat-card.success .number { color: var(--success); }
+        .stat-card.warning .number { color: var(--warning); }
+        .stat-card.error .number { color: var(--error); }
+
+        /* Sidebar Actions */
+        .sidebar-actions {
+            margin-top: auto;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: var(--font-brand);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: white;
+            box-shadow: 0 4px 15px rgba(124, 155, 255, 0.25);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(124, 155, 255, 0.35);
+        }
+
+        .btn-danger {
+            background: var(--error-bg);
+            color: var(--error);
+            border: 1px solid rgba(248, 113, 113, 0.2);
+        }
+        .btn-danger:hover {
+            background: rgba(248, 113, 113, 0.2);
+            border-color: rgba(248, 113, 113, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--border-hover);
+        }
+
+        /* ===== Main Content ===== */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        /* ===== Toolbar ===== */
+        .toolbar {
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 180px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 9px 16px 9px 40px;
+            background: var(--bg-input);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: var(--font-brand);
+            transition: var(--transition);
+            outline: none;
+            letter-spacing: 0.3px;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-muted);
+            font-family: var(--font-brand);
+        }
+
+        .search-box .icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group select {
+            padding: 9px 12px;
+            background: var(--bg-input);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-family: var(--font-brand);
+            cursor: pointer;
+            transition: var(--transition);
+            outline: none;
+            min-width: 100px;
+            letter-spacing: 0.3px;
+        }
+
+        .filter-group select:focus {
+            border-color: var(--accent);
+        }
+
+        .filter-group select:hover {
+            border-color: var(--border-hover);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            font-family: var(--font-brand);
+            letter-spacing: 0.3px;
+        }
+
+        .connection-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .connection-status .dot.online {
+            background: var(--success);
+            box-shadow: 0 0 12px rgba(52, 211, 153, 0.4);
+        }
+
+        .connection-status .dot.offline {
+            background: var(--error);
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
+        }
+
+        /* ===== Logs Container ===== */
+        .logs-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 24px 24px;
+        }
+
+        /* ===== Log Entry ===== */
+        .log-entry {
+            background: var(--bg-card);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            margin-bottom: 10px;
+            transition: var(--transition);
+            overflow: hidden;
+        }
+
+        .log-entry:hover {
+            border-color: var(--border-hover);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .log-entry-header {
+            padding: 14px 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            user-select: none;
+            transition: var(--transition);
+        }
+
+        .log-entry-header:hover {
+            background: var(--bg-hover);
+        }
+
+        .log-method {
+            font-weight: 600;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            letter-spacing: 0.8px;
+            flex-shrink: 0;
+            min-width: 56px;
+            text-align: center;
+            font-family: var(--font-brand);
+        }
+
+        .log-method.get { background: var(--success-bg); color: var(--success); }
+        .log-method.post { background: var(--warning-bg); color: var(--warning); }
+        .log-method.put { background: var(--accent-glow); color: var(--accent); }
+        .log-method.delete { background: var(--error-bg); color: var(--error); }
+        .log-method.patch { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+        .log-method.options { background: rgba(107, 114, 128, 0.15); color: var(--text-secondary); }
+        .log-method.head { background: rgba(107, 114, 128, 0.15); color: var(--text-secondary); }
+
+        .log-status {
+            font-weight: 600;
+            font-size: 13px;
+            padding: 2px 10px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            min-width: 40px;
+            text-align: center;
+            font-family: var(--font-brand);
+        }
+
+        .log-status.success { color: var(--success); }
+        .log-status.error { color: var(--error); }
+        .log-status.warning { color: var(--warning); }
+
+        .log-endpoint {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+            font-family: var(--font-brand);
+            letter-spacing: 0.3px;
+        }
+
+        .log-size {
+            font-size: 12px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            white-space: nowrap;
+            font-family: var(--font-brand);
+        }
+
+        .log-time {
+            font-size: 12px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            white-space: nowrap;
+            font-family: var(--font-brand);
+        }
+
+        .log-expand-icon {
+            color: var(--text-muted);
+            transition: var(--transition);
+            flex-shrink: 0;
+            font-size: 14px;
+        }
+
+        .log-entry.expanded .log-expand-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Log Body */
+        .log-body {
+            display: none;
+            padding: 0 18px 18px;
+            border-top: 1px solid var(--border-color);
+            background: rgba(13, 21, 32, 0.4);
+        }
+
+        .log-entry.expanded .log-body {
+            display: block;
+        }
+
+        .log-section {
+            margin-top: 16px;
+        }
+
+        .log-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: var(--font-brand);
+        }
+
+        .log-section-title .toggle-format {
+            font-size: 10px;
+            font-weight: 400;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 10px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            transition: var(--transition);
+            text-transform: none;
+            letter-spacing: 0.5px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            font-family: var(--font-brand);
+        }
+
+        .log-section-title .toggle-format:hover {
+            color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        .log-code {
+            background: rgba(10, 14, 26, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 12px 14px;
+            border-radius: var(--radius-sm);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            border: 1px solid var(--border-color);
+        }
+
+        .log-code .key {
+            color: var(--accent);
+        }
+
+        .log-code .value {
+            color: var(--success);
+        }
+
+        .log-code .string {
+            color: var(--warning);
+        }
+
+        .log-code .empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .log-code .hex {
+            color: #a78bfa;
+        }
+
+        .log-code .text {
+            color: var(--text-secondary);
+        }
+
+        /* ===== Empty State ===== */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+            filter: drop-shadow(0 0 30px rgba(124, 155, 255, 0.1));
+        }
+
+        .empty-state h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            font-family: var(--font-brand);
+            letter-spacing: 0.5px;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            color: var(--text-muted);
+            max-width: 400px;
+            line-height: 1.6;
+            font-family: var(--font-brand);
+            letter-spacing: 0.3px;
+        }
+
+        .empty-state .code-example {
+            margin-top: 20px;
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* ===== Loader ===== */
+        .loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            gap: 12px;
+            font-family: var(--font-brand);
+        }
+
+        .loader .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 240px;
+                padding: 16px;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                max-height: 200px;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding: 12px 16px;
+                flex-shrink: 0;
+            }
+            .logo {
+                margin-bottom: 12px;
+                padding-bottom: 12px;
+            }
+            .logo-text {
+                font-size: 18px;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
+                margin-bottom: 12px;
+            }
+            .stat-card .number {
+                font-size: 16px;
+            }
+            .stat-card .label {
+                font-size: 9px;
+            }
+            .sidebar-actions {
+                flex-direction: row;
+                padding-top: 12px;
+            }
+            .sidebar-actions .btn {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+            .toolbar {
+                padding: 12px 16px;
+                gap: 10px;
+            }
+            .logs-container {
+                padding: 12px 16px;
+            }
+            .log-entry-header {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .log-endpoint {
+                order: 10;
+                flex-basis: 100%;
+                white-space: normal;
+            }
+            .log-time {
+                font-size: 10px;
+            }
+            .log-size {
+                font-size: 10px;
+            }
+            .filter-group select {
+                min-width: 80px;
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+            .connection-status {
+                font-size: 10px;
+                padding: 4px 10px;
+            }
+            .empty-state h2 {
+                font-size: 17px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .log-status {
+                font-size: 11px;
+                padding: 1px 6px;
+                min-width: 30px;
+            }
+            .log-method {
+                font-size: 10px;
+                padding: 2px 6px;
+                min-width: 44px;
+            }
+            .filter-group {
+                width: 100%;
+            }
+            .filter-group select {
+                flex: 1;
+                min-width: 0;
+            }
+            .search-box {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Floating Orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app" id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">EXU</div>
+                <div>
+                    <div class="logo-text">
+                        <span class="brand">ᎬꪎՄ ─𑁍</span>
+                        <span class="sub">𝐏𝐫𝐨𝐱𝐲 𝐂𝐚𝐩𝐭𝐮𝐫𝐞</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card primary">
+                    <div class="number" id="statTotal">0</div>
+                    <div class="label">Total</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="number" id="statSuccess">0</div>
+                    <div class="label">Success</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="number" id="statWarning">0</div>
+                    <div class="label">Redirects</div>
+                </div>
+                <div class="stat-card error">
+                    <div class="number" id="statError">0</div>
+                    <div class="label">Errors</div>
+                </div>
+            </div>
+
+            <div class="sidebar-actions">
+                <button class="btn btn-primary" onclick="refreshLogs()">
+                    🔄 Refresh
+                </button>
+                <button class="btn btn-danger" onclick="clearLogs()">
+                    🗑️ Clear All
+                </button>
+                <button class="btn btn-secondary" onclick="scrollToTop()">
+                    ⬆️ Scroll to Top
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <div class="search-box">
+                    <span class="icon">🔍</span>
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Search endpoints, methods, status..."
+                        oninput="applyFilters()"
+                    >
+                </div>
+
+                <div class="filter-group">
+                    <select id="methodFilter" onchange="applyFilters()">
+                        <option value="">All Methods</option>
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="OPTIONS">OPTIONS</option>
+                        <option value="HEAD">HEAD</option>
+                    </select>
+
+                    <select id="statusFilter" onchange="applyFilters()">
+                        <option value="">All Status</option>
+                        <option value="2xx">2xx Success</option>
+                        <option value="3xx">3xx Redirect</option>
+                        <option value="4xx">4xx Client Error</option>
+                        <option value="5xx">5xx Server Error</option>
+                    </select>
+
+                    <select id="bodyFilter" onchange="applyFilters()">
+                        <option value="">All Requests</option>
+                        <option value="has">Has Body</option>
+                        <option value="empty">Empty Body</option>
+                    </select>
+                </div>
+
+                <div class="connection-status">
+                    <span class="dot online" id="statusDot"></span>
+                    <span id="statusText">Live</span>
+                </div>
+            </div>
+
+            <!-- Logs -->
+            <div class="logs-container" id="logsContainer">
+                <div class="empty-state">
+                    <div class="icon">📡</div>
+                    <h2>ᎬꪎՄ ─𑁍 𝐏𝐫𝐨𝐱𝐲 𝐂𝐚𝐩𝐭𝐮𝐫𝐞</h2>
+                    <p>Send requests to the proxy at <strong>http://localhost:8080</strong> to start capturing data</p>
+                    <div class="code-example">
+                        curl -X GET http://localhost:8080/api/users
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ===== State =====
+        let allLogs = [];
+        let filteredLogs = [];
+        let ws = null;
+        let reconnectAttempts = 0;
+
+        // ===== WebSocket Connection =====
+        function connectWebSocket() {
+            try {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                ws = new WebSocket(`${protocol}//${window.location.host}/socket.io/?EIO=4&transport=websocket`);
+                
+                ws.onopen = function() {
+                    updateConnectionStatus(true);
+                    reconnectAttempts = 0;
+                };
+
+                ws.onmessage = function(event) {
+                    const data = event.data;
+                    if (data.startsWith('42')) {
+                        try {
+                            const payload = JSON.parse(data.substring(2));
+                            if (payload[0] === 'new_log') {
+                                const log = payload[1];
+                                allLogs.unshift(log);
+                                if (allLogs.length > 500) allLogs.pop();
+                                updateStats();
+                                applyFilters();
+                            } else if (payload[0] === 'logs_cleared') {
+                                allLogs = [];
+                                updateStats();
+                                applyFilters();
+                            }
+                        } catch (e) {}
+                    }
+                };
+
+                ws.onclose = function() {
+                    updateConnectionStatus(false);
+                    reconnectAttempts++;
+                    const delay = Math.min(3000 * reconnectAttempts, 30000);
+                    setTimeout(connectWebSocket, delay);
+                };
+
+                ws.onerror = function() {
+                    updateConnectionStatus(false);
+                };
+            } catch (e) {
+                updateConnectionStatus(false);
+                setTimeout(connectWebSocket, 3000);
+            }
+        }
+
+        // ===== Update Connection Status =====
+        function updateConnectionStatus(online) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (online) {
+                dot.className = 'dot online';
+                text.textContent = 'Live';
+            } else {
+                dot.className = 'dot offline';
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        // ===== Fetch Initial Logs =====
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                const result = await response.json();
+                if (result.status === 'success') {
+                    allLogs = result.data || [];
+                    updateStats();
+                    applyFilters();
+                }
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+            }
+        }
+
+        // ===== Update Stats =====
+        function updateStats() {
+            const total = allLogs.length;
+            const success = allLogs.filter(l => l.status >= 200 && l.status < 300).length;
+            const redirect = allLogs.filter(l => l.status >= 300 && l.status < 400).length;
+            const error = allLogs.filter(l => l.status >= 400).length;
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statSuccess').textContent = success;
+            document.getElementById('statWarning').textContent = redirect;
+            document.getElementById('statError').textContent = error;
+        }
+
+        // ===== Apply Filters =====
+        function applyFilters() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const method = document.getElementById('methodFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            const body = document.getElementById('bodyFilter').value;
+
+            filteredLogs = allLogs.filter(log => {
+                if (search) {
+                    const searchable = [
+                        log.endpoint,
+                        log.method,
+                        String(log.status),
+                        log.request_body_text || '',
+                        log.response_body_text || ''
+                    ].join(' ').toLowerCase();
+                    if (!searchable.includes(search)) return false;
+                }
+                if (method && log.method !== method) return false;
+                if (status) {
+                    const statusGroup = Math.floor(log.status / 100) + 'xx';
+                    if (statusGroup !== status) return false;
+                }
+                if (body === 'has' && !log.request_body_text) return false;
+                if (body === 'empty' && log.request_body_text) return false;
+                return true;
+            });
+
+            renderLogs();
+        }
+
+        // ===== Render Logs =====
+        function renderLogs() {
+            const container = document.getElementById('logsContainer');
+
+            if (filteredLogs.length === 0) {
+                if (allLogs.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">📡</div>
+                            <h2>ᎬꪎՄ ─𑁍 𝐏𝐫𝐨𝐱𝐲 𝐂𝐚𝐩𝐭𝐮𝐫𝐞</h2>
+                            <p>Send requests to the proxy at <strong>http://localhost:8080</strong> to start capturing data</p>
+                            <div class="code-example">
+                                curl -X GET http://localhost:8080/api/users
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">🔍</div>
+                            <h2>No matches found</h2>
+                            <p>Try adjusting your search or filters</p>
+                        </div>
+                    `;
+                }
+                return;
+            }
+
+            let html = '';
+            filteredLogs.forEach((log, index) => {
+                const statusClass = log.status < 300 ? 'success' : (log.status < 400 ? 'warning' : 'error');
+                const methodClass = log.method.toLowerCase();
+                const hasBody = log.request_body_text && log.request_body_text.length > 0;
+                const size = log.response_size || 0;
+                const sizeStr = size > 1024 ? (size / 1024).toFixed(1) + 'KB' : size + 'B';
+
+                html += `
+                    <div class="log-entry" id="log-${log.id || index}">
+                        <div class="log-entry-header" onclick="toggleLog(${log.id || index})">
+                            <span class="log-method ${methodClass}">${log.method}</span>
+                            <span class="log-status ${statusClass}">${log.status}</span>
+                            <span class="log-endpoint">${log.endpoint}</span>
+                            ${hasBody ? '<span class="log-size">📦</span>' : ''}
+                            <span class="log-size">${sizeStr}</span>
+                            <span class="log-time">${log.timestamp}</span>
+                            <span class="log-expand-icon">▼</span>
+                        </div>
+                        <div class="log-body">
+                            <div class="log-section">
+                                <div class="log-section-title">📤 Request Headers</div>
+                                <div class="log-code">${formatHeaders(log.request_headers)}</div>
+                            </div>
+                            <div class="log-section">
+                                <div class="log-section-title">
+                                    📝 Request Body
+                                    <span class="toggle-format" onclick="event.stopPropagation();toggleFormat('req-${log.id || index}')">Toggle Hex/Text</span>
+                                </div>
+                                <div class="log-code" id="req-${log.id || index}">
+                                    ${formatBody(log.request_body_text, log.request_body_hex)}
+                                </div>
+                            </div>
+                            <div class="log-section">
+                                <div class="log-section-title">
+                                    📥 Response Body
+                                    <span class="toggle-format" onclick="event.stopPropagation();toggleFormat('resp-${log.id || index}')">Toggle Hex/Text</span>
+                                </div>
+                                <div class="log-code" id="resp-${log.id || index}">
+                                    ${formatBody(log.response_body_text, log.response_body_hex)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // ===== Format Helpers =====
+        function formatHeaders(headers) {
+            if (!headers || Object.keys(headers).length === 0) {
+                return '<span class="empty">No headers</span>';
+            }
+            return Object.entries(headers).map(([key, value]) => {
+                return `<span class="key">${escapeHtml(key)}:</span> <span class="value">${escapeHtml(value)}</span>`;
+            }).join('\n');
+        }
+
+        function formatBody(text, hex) {
+            if (!text && !hex) {
+                return '<span class="empty">(empty)</span>';
+            }
+            const escaped = escapeHtml(text || '');
+            return `<span class="text">${escaped}</span>`;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ===== Toggle Functions =====
+        function toggleLog(id) {
+            const entry = document.getElementById(`log-${id}`);
+            if (entry) {
+                entry.classList.toggle('expanded');
+            }
+        }
+
+        function toggleFormat(id) {
+            const element = document.getElementById(id);
+            if (!element) return;
+
+            if (!element.dataset.text && !element.dataset.hex) {
+                const textContent = element.querySelector('.text')?.textContent || '';
+                const hexContent = element.querySelector('.hex')?.textContent || '';
+                element.dataset.text = textContent;
+                element.dataset.hex = hexContent;
+            }
+
+            const current = element.dataset.current || 'text';
+            if (current === 'text') {
+                const hex = element.dataset.hex || '';
+                element.innerHTML = hex ? `<span class="hex">${escapeHtml(hex)}</span>` : '<span class="empty">(empty)</span>';
+                element.dataset.current = 'hex';
+            } else {
+                const text = element.dataset.text || '';
+                element.innerHTML = text ? `<span class="text">${escapeHtml(text)}</span>` : '<span class="empty">(empty)</span>';
+                element.dataset.current = 'text';
+            }
+        }
+
+        // ===== Actions =====
+        function refreshLogs() {
+            fetchLogs();
+        }
+
+        async function clearLogs() {
+            if (!confirm('Are you sure you want to clear all captured logs?')) return;
+            try {
+                const response = await fetch('/api/logs/clear', { method: 'POST' });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    allLogs = [];
+                    updateStats();
+                    applyFilters();
+                }
+            } catch (error) {
+                console.error('Error clearing logs:', error);
+            }
+        }
+
+        function scrollToTop() {
+            document.querySelector('.logs-container').scrollTop = 0;
+        }
+
+        // ===== Initialization =====
+        function init() {
+            connectWebSocket();
+            fetchLogs();
+            setInterval(() => {
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    fetchLogs();
+                }
+            }, 10000);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
