@@ -14,7 +14,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'exu-proxy-capture-secret-key-2024'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-TARGET = "https://clientbp.ggpolarbear.com"
+TARGET = "https://client.ind.freefiremobile.com"
 LOG_FILE = "capture.txt"
 LOG_JSON = "capture_logs.json"
 
