@@ -2,47 +2,164 @@ from flask import Flask, request, Response, jsonify, send_file
 from flask_socketio import SocketIO, emit
 import requests
 import binascii
-from datetime import datetime
 import json
 import os
 import time
-import threading
 import io
 import zipfile
+import threading
+from datetime import datetime
+
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+
+# ============================================================
+# TARGET
+# ============================================================
+TARGET = "https://clientbp.ggpolarbear.com"
+
+# ============================================================
+# AES KEYS
+# ============================================================
+AES_KEY = b'Yg&tc%DEuh6%Zc^8'
+AES_IV  = b'6oyZDr22E3ychjM%'
+
+ALT_KEYS = [
+    (b'Yg&tc%DEuh6%Zc^8', b'6oyZDr22E3ychjM%'),
+]
+
+# ============================================================
+# CONFIG
+# ============================================================
+LOG_FILE = "capture.txt"
+LOG_JSON = "capture_logs.json"
+GACHA_HEX_FILE = "gacha_payload.hex"
+DECRYPTED_DIR = "decrypted"
+INTERESTING_DIR = "interesting"
+
+INTERESTING_KEYWORDS = [
+    "purchasegacha", "gacha", "lottery", "spin",
+    "reward", "chest", "draw", "prize", "item",
+    "shop", "buy", "purchase", "redeem", "coupon",
+    "lotteryid", "lottery_id", "inventory", "equip",
+]
+MIN_INTERESTING_SIZE = 32
+MAX_LOGS = 1000
+PORT = 8080
+
+captured_logs = []
+latest_gacha = None
+LOG_LOCK = threading.Lock()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'exu-proxy-capture-secret-key-2024'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
+
 # ============================================================
-# TARGET SERVER — change this to whichever region you're on:
-#   BD / TH / ME / EU / VN / TW / RU / SG → clientbp.ggpolarbear.com
-#   IND                                   → client.ind.freefiremobile.com
-#   US / NA / SAC / BR                    → client.us.freefiremobile.com
+# AES HELPERS
 # ============================================================
-TARGET = "https://clientbp.ggpolarbear.com"
+def try_aes_decrypt(raw: bytes, key: bytes, iv: bytes) -> bytes:
+    if not raw:
+        return None
+    if len(raw) % 16 != 0:
+        raw_padded = raw + b'\x00' * (16 - (len(raw) % 16))
+    else:
+        raw_padded = raw
+    try:
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        decrypted = cipher.decrypt(raw_padded)
+        try:
+            return unpad(decrypted, AES.block_size)
+        except ValueError:
+            return decrypted
+    except Exception:
+        return None
 
-LOG_FILE = "capture.txt"
-LOG_JSON = "capture_logs.json"
-GACHA_HEX_FILE = "gacha_payload.hex"      # <-- auto-saved latest gacha payload
 
-# Endpoints we care about (case-insensitive substring match)
-GACHA_KEYWORDS = ["purchasegacha", "gacha", "lottery", "spin"]
+def looks_like_protobuf(b: bytes) -> bool:
+    if not b or len(b) < 2:
+        return False
+    for i in range(min(4, len(b))):
+        tag = b[i]
+        if tag == 0:
+            continue
+        wire_type = tag & 0x07
+        field_num = tag >> 3
+        if field_num >= 1 and wire_type in (0, 1, 2, 5):
+            return True
+    return False
 
-# Store logs in memory
-captured_logs = []
-latest_gacha = None       # holds the most recent PurchaseGacha entry
-MAX_LOGS = 500
+
+def try_all_keys(raw: bytes):
+    results = []
+    for idx, (k, v) in enumerate(ALT_KEYS):
+        dec = try_aes_decrypt(raw, k, v)
+        if dec is None:
+            continue
+        results.append({
+            "key_index": idx,
+            "key": k.decode(errors="ignore"),
+            "iv": v.decode(errors="ignore"),
+            "decrypted_hex": dec.hex(),
+            "decrypted_len": len(dec),
+            "decrypted_text_preview": dec[:64].decode('utf-8', errors='replace'),
+            "looks_like_protobuf": looks_like_protobuf(dec),
+        })
+    return results
 
 
-def is_gacha_endpoint(endpoint: str) -> bool:
+def best_decryption(raw: bytes):
+    if not raw or len(raw) < 16:
+        return None
+    results = try_all_keys(raw)
+    if not results:
+        return None
+    for r in results:
+        if r["looks_like_protobuf"]:
+            return r
+    for r in results:
+        try:
+            raw[:32].decode('utf-8')
+            return r
+        except Exception:
+            continue
+    return results[0]
+
+
+# ============================================================
+# LOGGING
+# ============================================================
+def is_interesting(endpoint, req_size, resp_size):
     low = endpoint.lower()
-    return any(kw in low for kw in GACHA_KEYWORDS)
+    if any(kw in low for kw in INTERESTING_KEYWORDS):
+        return True
+    if resp_size >= MIN_INTERESTING_SIZE:
+        return True
+    return False
+
+
+def contains_hacks(raw):
+    if not raw:
+        return False
+    return b"hacks" in raw or b"HACKS" in raw or b"hack" in raw
 
 
 def log_entry(endpoint, method, headers, req_data, resp_data, status, duration=0):
     global latest_gacha
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+    req_hex = binascii.hexlify(req_data).decode() if req_data else None
+    resp_hex = binascii.hexlify(resp_data).decode() if resp_data else None
+
+    req_dec = best_decryption(req_data) if req_data else None
+    resp_dec = best_decryption(resp_data) if resp_data else None
+
+    interesting = is_interesting(endpoint,
+                                 len(req_data) if req_data else 0,
+                                 len(resp_data) if resp_data else 0)
+    is_gacha = "purchasegacha" in endpoint.lower() or "gacha" in endpoint.lower()
+    has_hacks = contains_hacks(req_data or b"") or contains_hacks(resp_data or b"")
 
     entry = {
         "id": int(time.time() * 1000),
@@ -50,57 +167,95 @@ def log_entry(endpoint, method, headers, req_data, resp_data, status, duration=0
         "endpoint": endpoint,
         "method": method,
         "status": status,
-        "is_gacha": is_gacha_endpoint(endpoint),
+        "is_interesting": interesting,
+        "is_gacha": is_gacha,
+        "contains_hacks": has_hacks,
         "request_headers": dict(headers),
-        "request_body_hex": binascii.hexlify(req_data).decode() if req_data else None,
-        "request_body_text": req_data.decode('utf-8', errors='ignore') if req_data else None,
-        "request_body_base64": binascii.b2a_base64(req_data).decode().strip() if req_data else None,
-        "response_body_hex": binascii.hexlify(resp_data).decode() if resp_data else None,
-        "response_body_text": resp_data.decode('utf-8', errors='ignore') if resp_data else None,
-        "response_body_base64": binascii.b2a_base64(resp_data).decode().strip() if resp_data else None,
         "request_size": len(req_data) if req_data else 0,
         "response_size": len(resp_data) if resp_data else 0,
-        "duration": round(duration * 1000, 2)
+        "duration": round(duration * 1000, 2),
+        "request_body_hex": req_hex,
+        "request_body_base64": binascii.b2a_base64(req_data).decode().strip() if req_data else None,
+        "response_body_hex": resp_hex,
+        "response_body_base64": binascii.b2a_base64(resp_data).decode().strip() if resp_data else None,
+        "request_decrypted": req_dec,
+        "response_decrypted": resp_dec,
     }
 
-    captured_logs.insert(0, entry)
-    if len(captured_logs) > MAX_LOGS:
-        captured_logs.pop()
+    with LOG_LOCK:
+        captured_logs.insert(0, entry)
+        if len(captured_logs) > MAX_LOGS:
+            captured_logs.pop()
 
-    # ---- Highlight gacha captures in the console ----
-    if entry["is_gacha"]:
+    # ---- Console ----
+    if is_gacha:
         latest_gacha = entry
-        req_hex = entry["request_body_hex"] or "(empty)"
-        resp_hex = entry["response_body_hex"] or "(empty)"
-
-        print("\n" + "=" * 70)
+        print("\n" + "=" * 74)
         print("  🎯  GACHA REQUEST CAPTURED")
-        print("=" * 70)
+        print("=" * 74)
         print(f"  Endpoint : {method} {endpoint}")
         print(f"  Status   : {status}   ({entry['duration']}ms)")
         print(f"  Req Size : {entry['request_size']} bytes")
         print(f"  Resp Size: {entry['response_size']} bytes")
-        print("-" * 70)
-        print("  REQUEST BODY (HEX)  ← paste this into app.py RAW_HEX_PAYLOAD")
-        print(f"  {req_hex}")
-        print("-" * 70)
-        print("  RESPONSE BODY (HEX)")
-        print(f"  {resp_hex[:200]}{'...' if len(resp_hex) > 200 else ''}")
-        print("=" * 70 + "\n")
-
-        # Auto-save to file
+        print("-" * 74)
+        print(f"  REQUEST  (raw hex)       : {req_hex}")
+        if req_dec:
+            print(f"  REQUEST  (AES decrypted) : {req_dec['decrypted_hex']}")
+            print(f"    proto? {req_dec['looks_like_protobuf']}  preview: {req_dec['decrypted_text_preview']!r}")
+        print("-" * 74)
+        print(f"  RESPONSE (raw hex)       : {(resp_hex or '')[:160]}")
+        if resp_dec:
+            print(f"  RESPONSE (AES decrypted) : {resp_dec['decrypted_hex'][:160]}")
+            print(f"    proto? {resp_dec['looks_like_protobuf']}  preview: {resp_dec['decrypted_text_preview']!r}")
+        print("=" * 74 + "\n")
         try:
             with open(GACHA_HEX_FILE, "w", encoding="utf-8") as f:
-                f.write(req_hex + "\n")
+                f.write((req_hex or "") + "\n")
+        except Exception:
+            pass
+    elif has_hacks:
+        print("\n" + "!" * 74)
+        print("  ⚠️  'hacks' MARKER FOUND")
+        print("!" * 74 + "\n")
+    else:
+        marker = ""
+        if req_dec and req_dec["looks_like_protobuf"]:
+            marker += " [req→proto]"
+        if resp_dec and resp_dec["looks_like_protobuf"]:
+            marker += " [resp→proto]"
+        print(f"[*] {method:6s} {endpoint:45s} -> {status}  "
+              f"(req {entry['request_size']}B / resp {entry['response_size']}B){marker}")
+
+    # ---- Save interesting blobs ----
+    if interesting:
+        try:
+            os.makedirs(DECRYPTED_DIR, exist_ok=True)
+            safe_ep = endpoint.strip("/").replace("/", "_") or "root"
+            base = f"{DECRYPTED_DIR}/{entry['id']}_{safe_ep}"
+            if req_data:
+                with open(base + "_req.raw.bin", "wb") as f:
+                    f.write(req_data)
+                if req_dec:
+                    with open(base + "_req.dec.bin", "wb") as f:
+                        f.write(bytes.fromhex(req_dec["decrypted_hex"]))
+            if resp_data:
+                with open(base + "_resp.raw.bin", "wb") as f:
+                    f.write(resp_data)
+                if resp_dec:
+                    with open(base + "_resp.dec.bin", "wb") as f:
+                        f.write(bytes.fromhex(resp_dec["decrypted_hex"]))
+            entry["saved_to"] = base
         except Exception as e:
-            print(f"[!] Could not save {GACHA_HEX_FILE}: {e}")
+            print(f"[!] Save error: {e}")
 
-    # ---- Emit to WebSocket ----
+    # ---- WebSocket ----
     socketio.emit('new_log', entry)
-    if entry["is_gacha"]:
+    if is_gacha:
         socketio.emit('new_gacha', entry)
+    if has_hacks:
+        socketio.emit('hacks_marker', entry)
 
-    # ---- Save to JSON ----
+    # ---- JSON ----
     try:
         existing = []
         if os.path.exists(LOG_JSON):
@@ -112,125 +267,152 @@ def log_entry(endpoint, method, headers, req_data, resp_data, status, duration=0
         with open(LOG_JSON, 'w', encoding='utf-8') as f:
             json.dump(existing, f, indent=2)
     except Exception as e:
-        print(f"Error saving to JSON: {e}")
+        print(f"[JSON] save err: {e}")
 
-    # ---- Append to text log ----
+    # ---- Text log ----
     hdr = "\n".join(f"{k}: {v}" for k, v in headers.items() if k.lower() != "host")
     text_entry = f"""
-{'='*60}
+{'='*74}
 [{ts}] {method} {endpoint} -> {status} ({round(duration*1000,2)}ms)
-{'='*60}
+INTERESTING: {interesting} | GACHA: {is_gacha} | HACKS: {has_hacks}
+{'='*74}
 REQUEST HEADERS:
 {hdr}
 
-REQUEST BODY (hex):
-{binascii.hexlify(req_data).decode() if req_data else '(empty)'}
+REQUEST  (hex):
+{req_hex or '(empty)'}
 
-REQUEST BODY (base64):
-{binascii.b2a_base64(req_data).decode().strip() if req_data else '(empty)'}
+REQUEST  (AES decrypted hex):
+{(req_dec or {}).get('decrypted_hex', '(no AES layer)')}
 
-RESPONSE BODY (hex):
-{binascii.hexlify(resp_data).decode() if resp_data else '(empty)'}
+REQUEST  (AES decrypted preview):
+{(req_dec or {}).get('decrypted_text_preview', '')}
 
-RESPONSE BODY (base64):
-{binascii.b2a_base64(resp_data).decode().strip() if resp_data else '(empty)'}
-{'='*60}
+RESPONSE (hex):
+{resp_hex or '(empty)'}
+
+RESPONSE (AES decrypted hex):
+{(resp_dec or {}).get('decrypted_hex', '(no AES layer)')}
+
+RESPONSE (AES decrypted preview):
+{(resp_dec or {}).get('decrypted_text_preview', '')}
+{'='*74}
 """
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(text_entry)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(text_entry)
+    except Exception:
+        pass
 
 
 # ============================================================
-# DASHBOARD
+# ROUTES
 # ============================================================
 @app.route('/')
 def index():
     if os.path.exists('index.html'):
         return send_file('index.html')
-    return Response(
-        "<h1>Proxy Capture Running</h1>"
-        "<p>Dashboard file index.html not found. API endpoints still work:</p>"
-        "<ul>"
-        "<li><a href='/api/gacha'>/api/gacha</a> – latest gacha request</li>"
-        "<li><a href='/api/logs'>/api/logs</a> – all logs</li>"
-        "<li><a href='/api/stats'>/api/stats</a> – stats</li>"
-        "</ul>",
-        mimetype='text/html'
-    )
+
+    return Response(f"""
+    <html><head><title>Proxy Capture</title>
+    <style>
+        body {{ font-family: monospace; background:#111; color:#0f0; padding:20px; }}
+        a {{ color:#6cf; }}
+        .pub {{ background:#222; padding:10px; border:1px solid #0f0; }}
+        table {{ border-collapse:collapse; }}
+        td,th {{ padding:6px 12px; border:1px solid #333; }}
+    </style></head><body>
+    <h1>Proxy Capture + AES Decrypt</h1>
+    <div class="pub">
+        <b>Local URL:</b> http://localhost:{PORT}<br>
+        <b>Access from other devices on the same Wi-Fi:</b> http://&lt;your-PC-IP&gt;:{PORT}
+    </div>
+    <h2>Endpoints</h2>
+    <table>
+      <tr><th>Path</th><th>Description</th></tr>
+      <tr><td><a href="/api/logs">/api/logs</a></td><td>All captured entries (JSON)</td></tr>
+      <tr><td><a href="/api/decrypted">/api/decrypted</a></td><td>Only entries with successful AES decrypt</td></tr>
+      <tr><td><a href="/api/interesting">/api/interesting</a></td><td>Gacha/shop/reward requests</td></tr>
+      <tr><td><a href="/api/gacha">/api/gacha</a></td><td>Latest PurchaseGacha request (JSON)</td></tr>
+      <tr><td><a href="/api/gacha/hex">/api/gacha/hex</a></td><td>Latest PurchaseGacha raw hex</td></tr>
+      <tr><td><a href="/api/gacha/hex_decrypted">/api/gacha/hex_decrypted</a></td><td>Latest PurchaseGacha decrypted hex</td></tr>
+      <tr><td><a href="/api/stats">/api/stats</a></td><td>Counts, AES key, decryption success rates</td></tr>
+      <tr><td><a href="/download/all">/download/all</a></td><td>ZIP of everything</td></tr>
+      <tr><td><a href="/download/decrypted">/download/decrypted</a></td><td>ZIP of all decrypted payloads</td></tr>
+    </table>
+    <p>AES key: <code>{AES_KEY.decode()}</code> / IV: <code>{AES_IV.decode()}</code></p>
+    </body></html>
+    """, mimetype='text/html')
 
 
-# ============================================================
-# GACHA-SPECIFIC ENDPOINTS
-# ============================================================
+@app.route('/api/decrypted')
+def api_decrypted():
+    hits = []
+    for l in captured_logs:
+        if l.get("request_decrypted") or l.get("response_decrypted"):
+            hits.append({
+                "id": l["id"], "timestamp": l["timestamp"],
+                "endpoint": l["endpoint"], "method": l["method"],
+                "status": l["status"],
+                "request_hex": l["request_body_hex"],
+                "request_decrypted": l["request_decrypted"],
+                "response_hex": l["response_body_hex"],
+                "response_decrypted": l["response_decrypted"],
+            })
+    return jsonify({"status": "success", "count": len(hits), "data": hits})
+
+
+@app.route('/api/decrypted/<int:log_id>')
+def api_decrypted_one(log_id):
+    for l in captured_logs:
+        if l["id"] == log_id:
+            return jsonify(l)
+    return jsonify({"error": "not found"}), 404
+
+
 @app.route('/api/gacha')
-def get_latest_gacha():
-    """Return the most recent PurchaseGacha request (hex + base64 + headers)."""
+def api_gacha():
     if not latest_gacha:
-        return jsonify({"status": "error", "message": "No gacha request captured yet"}), 404
-
-    return jsonify({
-        "status": "success",
-        "timestamp": latest_gacha["timestamp"],
-        "endpoint": latest_gacha["endpoint"],
-        "method": latest_gacha["method"],
-        "request_hex": latest_gacha["request_body_hex"],
-        "request_base64": latest_gacha["request_body_base64"],
-        "request_size": latest_gacha["request_size"],
-        "request_headers": latest_gacha["request_headers"],
-        "response_hex": latest_gacha["response_body_hex"],
-        "response_size": latest_gacha["response_size"],
-        "http_status": latest_gacha["status"]
-    })
+        return jsonify({"error": "no gacha yet"}), 404
+    return jsonify(latest_gacha)
 
 
 @app.route('/api/gacha/hex')
-def get_latest_gacha_hex():
-    """Plain-text endpoint: just the hex string, ready to paste into app.py."""
+def api_gacha_hex():
     if not latest_gacha:
-        return Response("No gacha request captured yet", status=404, mimetype='text/plain')
-    return Response(
-        latest_gacha["request_body_hex"] or "",
-        mimetype='text/plain'
-    )
+        return Response("no gacha yet", status=404, mimetype='text/plain')
+    return Response(latest_gacha["request_body_hex"] or "", mimetype='text/plain')
 
 
-@app.route('/api/gacha/export')
-def export_gacha_bin():
-    """Download the latest gacha request body as a .bin file."""
-    if not latest_gacha or not latest_gacha["request_body_hex"]:
-        return jsonify({"error": "No gacha request captured"}), 404
-    raw_bytes = bytes.fromhex(latest_gacha["request_body_hex"])
-    return Response(
-        raw_bytes,
-        mimetype='application/octet-stream',
-        headers={'Content-Disposition': 'attachment;filename=gacha_request.bin'}
-    )
+@app.route('/api/gacha/hex_decrypted')
+def api_gacha_hex_decrypted():
+    if not latest_gacha:
+        return Response("no gacha yet", status=404, mimetype='text/plain')
+    dec = latest_gacha.get("request_decrypted")
+    if not dec:
+        return Response("gacha request was not AES-encrypted", mimetype='text/plain')
+    return Response(dec["decrypted_hex"], mimetype='text/plain')
 
 
-@app.route('/api/gacha/history')
-def get_gacha_history():
-    """Return all captured gacha requests (newest first)."""
-    gacha_logs = [l for l in captured_logs if l.get("is_gacha")]
-    return jsonify({"status": "success", "count": len(gacha_logs), "data": gacha_logs})
+@app.route('/api/interesting')
+def api_interesting():
+    hits = [l for l in captured_logs if l.get("is_interesting")]
+    return jsonify({"status": "success", "count": len(hits), "data": hits})
 
 
-# ============================================================
-# GENERAL API
-# ============================================================
 @app.route('/api/logs')
-def get_logs():
+def api_logs():
     try:
         if os.path.exists(LOG_JSON):
             with open(LOG_JSON, 'r', encoding='utf-8') as f:
-                logs = json.load(f)
-            return jsonify({"status": "success", "data": logs, "count": len(logs)})
-    except Exception as e:
-        print(f"Error reading logs: {e}")
-    return jsonify({"status": "success", "data": captured_logs, "count": len(captured_logs)})
+                return jsonify({"status": "success", "data": json.load(f)})
+    except Exception:
+        pass
+    return jsonify({"status": "success", "data": captured_logs})
 
 
 @app.route('/api/logs/clear', methods=['POST'])
-def clear_logs():
+def api_clear():
     global captured_logs, latest_gacha
     captured_logs = []
     latest_gacha = None
@@ -238,161 +420,87 @@ def clear_logs():
         if os.path.exists(f):
             os.remove(f)
     socketio.emit('logs_cleared')
-    return jsonify({"status": "success", "message": "All logs cleared"})
+    return jsonify({"status": "success"})
 
 
 @app.route('/api/stats')
-def get_stats():
+def api_stats():
     total = len(captured_logs)
-    success = len([l for l in captured_logs if 200 <= l['status'] < 300])
-    redirect = len([l for l in captured_logs if 300 <= l['status'] < 400])
-    error = len([l for l in captured_logs if l['status'] >= 400])
-    gacha_count = len([l for l in captured_logs if l.get("is_gacha")])
-    total_size = sum([l.get('response_size', 0) for l in captured_logs])
-    avg_duration = 0
-    if total > 0:
-        avg_duration = sum([l.get('duration', 0) for l in captured_logs]) / total
+    dec_req = sum(1 for l in captured_logs if l.get("request_decrypted"))
+    dec_resp = sum(1 for l in captured_logs if l.get("response_decrypted"))
+    proto_req = sum(1 for l in captured_logs
+                    if l.get("request_decrypted") and l["request_decrypted"].get("looks_like_protobuf"))
+    proto_resp = sum(1 for l in captured_logs
+                     if l.get("response_decrypted") and l["response_decrypted"].get("looks_like_protobuf"))
     return jsonify({
         "total": total,
-        "success": success,
-        "redirect": redirect,
-        "error": error,
-        "gacha_captures": gacha_count,
-        "total_size": total_size,
-        "avg_duration": round(avg_duration, 2)
+        "requests_decrypted": dec_req,
+        "responses_decrypted": dec_resp,
+        "request_decrypt_looks_proto": proto_req,
+        "response_decrypt_looks_proto": proto_resp,
+        "gacha_captures": sum(1 for l in captured_logs if l.get("is_gacha")),
+        "interesting": sum(1 for l in captured_logs if l.get("is_interesting")),
+        "aes_key": AES_KEY.decode(),
+        "aes_iv": AES_IV.decode(),
+        "local_url": f"http://localhost:{PORT}",
     })
 
 
 # ============================================================
-# RAW DATA ENDPOINTS
+# DOWNLOADS
 # ============================================================
-@app.route('/api/raw/<int:log_id>')
-def get_raw_body(log_id):
-    for log in captured_logs:
-        if log['id'] == log_id:
-            return jsonify({
-                "id": log['id'],
-                "method": log['method'],
-                "endpoint": log['endpoint'],
-                "timestamp": log['timestamp'],
-                "status": log['status'],
-                "is_gacha": log.get("is_gacha", False),
-                "request_hex": log.get('request_body_hex', ''),
-                "request_base64": log.get('request_body_base64', ''),
-                "request_size": log.get('request_size', 0),
-                "response_hex": log.get('response_body_hex', ''),
-                "response_base64": log.get('response_body_base64', ''),
-                "response_size": log.get('response_size', 0)
-            })
-    return jsonify({"error": "Log not found"}), 404
-
-
-@app.route('/api/raw/latest')
-def get_latest_raw():
-    if captured_logs:
-        log = captured_logs[0]
-        return jsonify({
-            "id": log['id'],
-            "method": log['method'],
-            "endpoint": log['endpoint'],
-            "timestamp": log['timestamp'],
-            "status": log['status'],
-            "is_gacha": log.get("is_gacha", False),
-            "request_hex": log.get('request_body_hex', ''),
-            "request_base64": log.get('request_body_base64', ''),
-            "request_size": log.get('request_size', 0),
-            "response_hex": log.get('response_body_hex', ''),
-            "response_base64": log.get('response_body_base64', ''),
-            "response_size": log.get('response_size', 0)
-        })
-    return jsonify({"error": "No logs available"}), 404
-
-
-@app.route('/api/raw/export/<int:log_id>')
-def export_raw_body(log_id):
-    for log in captured_logs:
-        if log['id'] == log_id:
-            hex_data = log.get('request_body_hex', '')
-            if hex_data:
-                raw_bytes = bytes.fromhex(hex_data)
-                return Response(
-                    raw_bytes,
-                    mimetype='application/octet-stream',
-                    headers={'Content-Disposition': f'attachment;filename=request_{log_id}.bin'}
-                )
-            return jsonify({"error": "No body data"}), 404
-    return jsonify({"error": "Log not found"}), 404
-
-
-# ============================================================
-# DOWNLOAD ENDPOINTS
-# ============================================================
-@app.route('/download/json')
-def download_json():
-    try:
-        if os.path.exists(LOG_JSON):
-            return send_file(LOG_JSON, as_attachment=True,
-                             download_name='capture_logs.json',
-                             mimetype='application/json')
-        data = json.dumps(captured_logs, indent=2)
-        return Response(data, mimetype='application/json',
-                        headers={'Content-Disposition': 'attachment;filename=capture_logs.json'})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route('/download/txt')
-def download_txt():
-    try:
-        if os.path.exists(LOG_FILE):
-            return send_file(LOG_FILE, as_attachment=True,
-                             download_name='capture.txt', mimetype='text/plain')
-        return Response("No logs yet", mimetype='text/plain')
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route('/download/gacha')
-def download_gacha():
-    """Download the latest gacha hex as a .txt file."""
-    if not latest_gacha:
-        return jsonify({"error": "No gacha captured yet"}), 404
-    return Response(
-        latest_gacha["request_body_hex"] or "",
-        mimetype='text/plain',
-        headers={'Content-Disposition': 'attachment;filename=gacha_payload.hex'}
-    )
-
-
 @app.route('/download/all')
 def download_all():
-    try:
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            if os.path.exists(LOG_JSON):
-                zip_file.write(LOG_JSON, 'capture_logs.json')
-            else:
-                zip_file.writestr('capture_logs.json', json.dumps(captured_logs, indent=2))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        if os.path.exists(LOG_JSON):
+            z.write(LOG_JSON, 'capture_logs.json')
+        if os.path.exists(LOG_FILE):
+            z.write(LOG_FILE, 'capture.txt')
+        if latest_gacha and latest_gacha.get("request_body_hex"):
+            z.writestr('gacha_payload.hex', latest_gacha["request_body_hex"])
+        if latest_gacha and latest_gacha.get("request_decrypted"):
+            z.writestr('gacha_payload.decrypted.hex',
+                       latest_gacha["request_decrypted"]["decrypted_hex"])
+        for folder in (DECRYPTED_DIR, INTERESTING_DIR):
+            if os.path.exists(folder):
+                for fn in os.listdir(folder):
+                    z.write(os.path.join(folder, fn), f"{folder}/{fn}")
+    buf.seek(0)
+    return send_file(buf, as_attachment=True,
+                     download_name='logs.zip', mimetype='application/zip')
 
-            if os.path.exists(LOG_FILE):
-                zip_file.write(LOG_FILE, 'capture.txt')
 
-            if latest_gacha and latest_gacha.get("request_body_hex"):
-                zip_file.writestr('gacha_payload.hex', latest_gacha["request_body_hex"])
-                zip_file.writestr('gacha_headers.json', json.dumps(latest_gacha["request_headers"], indent=2))
-
-        zip_buffer.seek(0)
-        return send_file(zip_buffer, as_attachment=True,
-                         download_name='logs.zip', mimetype='application/zip')
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+@app.route('/download/decrypted')
+def download_decrypted():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        if os.path.exists(DECRYPTED_DIR):
+            for fn in os.listdir(DECRYPTED_DIR):
+                z.write(os.path.join(DECRYPTED_DIR, fn), fn)
+        hits = []
+        for l in captured_logs:
+            if l.get("request_decrypted") or l.get("response_decrypted"):
+                hits.append({
+                    "id": l["id"], "endpoint": l["endpoint"],
+                    "request_hex": l["request_body_hex"],
+                    "request_decrypted": l["request_decrypted"],
+                    "response_hex": l["response_body_hex"],
+                    "response_decrypted": l["response_decrypted"],
+                })
+        z.writestr('decrypted_summary.json', json.dumps(hits, indent=2))
+    buf.seek(0)
+    return send_file(buf, as_attachment=True,
+                     download_name='decrypted.zip', mimetype='application/zip')
 
 
 # ============================================================
 # PROXY
 # ============================================================
-@app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
-@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
+@app.route('/<path:path>',
+           methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
+@app.route('/', defaults={'path': ''},
+           methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
 def proxy(path):
     endpoint = f"/{path}" if path else "/"
     req_data = request.get_data()
@@ -401,25 +509,22 @@ def proxy(path):
     if request.query_string:
         url += f"?{request.query_string.decode()}"
 
-    start_time = time.time()
+    t0 = time.time()
     try:
         resp = requests.request(
-            method=request.method,
-            url=url,
-            headers=headers,
-            data=req_data,
-            cookies=request.cookies,
-            allow_redirects=False,
-            timeout=30
+            method=request.method, url=url, headers=headers,
+            data=req_data, cookies=request.cookies,
+            allow_redirects=False, timeout=30
         )
-        resp_body = resp.content
-        duration = time.time() - start_time
-
-        log_entry(endpoint, request.method, headers, req_data, resp_body, resp.status_code, duration)
+        body = resp.content
+        dur = time.time() - t0
+        log_entry(endpoint, request.method, headers, req_data, body,
+                  resp.status_code, dur)
 
         excluded = ["content-encoding", "transfer-encoding", "connection"]
-        resp_headers = [(k, v) for k, v in resp.raw.headers.items() if k.lower() not in excluded]
-        return Response(resp_body, resp.status_code, resp_headers)
+        resp_headers = [(k, v) for k, v in resp.raw.headers.items()
+                        if k.lower() not in excluded]
+        return Response(body, resp.status_code, resp_headers)
     except Exception as e:
         return Response(f"Proxy error: {e}", 502)
 
@@ -428,45 +533,38 @@ def proxy(path):
 # WEBSOCKET
 # ============================================================
 @socketio.on('connect')
-def handle_connect():
-    print(f'Client connected: {request.sid}')
+def ws_connect():
     emit('connected', {'status': 'connected'})
 
 
 @socketio.on('disconnect')
-def handle_disconnect():
-    print(f'Client disconnected: {request.sid}')
+def ws_disconnect():
+    pass
 
 
 # ============================================================
-# STARTUP
+# MAIN
 # ============================================================
-def cleanup_old_logs():
-    if os.path.exists(LOG_JSON):
-        try:
-            with open(LOG_JSON, 'r', encoding='utf-8') as f:
-                logs = json.load(f)
-            if len(logs) > MAX_LOGS:
-                logs = logs[:MAX_LOGS]
-                with open(LOG_JSON, 'w', encoding='utf-8') as f:
-                    json.dump(logs, f, indent=2)
-        except Exception:
-            pass
-
-
 if __name__ == '__main__':
-    cleanup_old_logs()
-    print("\n" + "=" * 60)
-    print("   ᎬꪎՄ ─𑁍  PROXY CAPTURE  (Gacha Focus Mode)")
-    print("=" * 60)
-    print(f"   📡 Target     : {TARGET}")
-    print(f"   🌐 Dashboard  : http://localhost:8080")
-    print(f"   🎯 Gacha Hex  : http://localhost:8080/api/gacha/hex")
-    print(f"   🎯 Gacha JSON : http://localhost:8080/api/gacha")
-    print(f"   📥 Download   : http://localhost:8080/download/gacha")
-    print(f"   💾 Auto-saved : {GACHA_HEX_FILE}")
-    print("=" * 60)
-    print("   Watching for endpoints containing: purchasegacha, gacha, lottery, spin")
+    os.makedirs(DECRYPTED_DIR, exist_ok=True)
+    os.makedirs(INTERESTING_DIR, exist_ok=True)
+
+    print("\n" + "=" * 74)
+    print("   PROXY CAPTURE  ─  AUTO AES DECRYPT")
+    print("=" * 74)
+    print(f"   📡 Target        : {TARGET}")
+    print(f"   🔑 AES Key       : {AES_KEY.decode()}")
+    print(f"   🔑 AES IV        : {AES_IV.decode()}")
+    print(f"   🌐 Local         : http://localhost:{PORT}")
+    print(f"   🌐 LAN           : http://<your-PC-IP>:{PORT}")
+    print("=" * 74)
+    print("   Every request/response is logged + AES-decrypted on the fly.")
     print("   Press Ctrl+C to stop\n")
 
-    socketio.run(app, host='0.0.0.0', port=8080, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=PORT,
+        debug=False,
+        allow_unsafe_werkzeug=True
+    )
